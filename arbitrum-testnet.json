@@ -1,0 +1,5 @@
+{
+  "chainId": 421613,
+  "rpc": "https://goerli-rollup.arbitrum.io/rpc",
+  "wsRpc": "wss://goerli-rollup.arbitrum.io/ws"
+}

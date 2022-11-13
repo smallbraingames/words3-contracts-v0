@@ -1,0 +1,4 @@
+{
+  "components": ["TileComponent", "ScoreComponent", "LetterCountComponent"],
+  "systems": [{ "name": "BoardSystem", "writeAccess": ["TileComponent", "ScoreComponent", "LetterCountComponent"] }]
+}
