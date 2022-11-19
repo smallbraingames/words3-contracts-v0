@@ -205,11 +205,14 @@ contract BoardSystem is System, LinearVRGDA {
         TileComponent tiles
     ) public view {
         // Ensure word isn't missing letters at edges
-        if (tiles.hasTileAtPosition(getLetterPosition(-1, position, direction)))
-            revert InvalidWordStart();
         if (
             tiles.hasTileAtPosition(
-                getLetterPosition(
+                LibBoard.getLetterPosition(-1, position, direction)
+            )
+        ) revert InvalidWordStart();
+        if (
+            tiles.hasTileAtPosition(
+                LibBoard.getLetterPosition(
                     int32(uint32(word.length)),
                     position,
                     direction
@@ -223,7 +226,7 @@ contract BoardSystem is System, LinearVRGDA {
         Letter[] memory filledWord = new Letter[](word.length);
 
         for (uint32 i = 0; i < word.length; i++) {
-            Position memory letterPosition = getLetterPosition(
+            Position memory letterPosition = LibBoard.getLetterPosition(
                 int32(i),
                 position,
                 direction
@@ -279,11 +282,13 @@ contract BoardSystem is System, LinearVRGDA {
             } else {
                 // Ensure bounds are valid (empty at edges) for nonempty letters
                 // Bounds that are too large will be caught while verifying formed words
-                (
-                    Position memory start,
-                    Position memory end
-                ) = getOutsideBoundPositions(
-                        getLetterPosition(int32(i), position, direction),
+                (Position memory start, Position memory end) = LibBoard
+                    .getOutsideBoundPositions(
+                        LibBoard.getLetterPosition(
+                            int32(i),
+                            position,
+                            direction
+                        ),
                         direction,
                         bounds.positive[i],
                         bounds.negative[i]
@@ -313,11 +318,15 @@ contract BoardSystem is System, LinearVRGDA {
 
         // Evenly split the reward fraction of among tiles the player used to create their word
         // Rewards are only awarded to players who are used in the "primary" word
-        uint256 rewardPerEmptyTile = getRewardPerEmptyTile(word);
+        uint256 rewardPerEmptyTile = LibBoard.getRewardPerEmptyTile(
+            word,
+            rewardFraction,
+            msg.value
+        );
 
         // Place tiles and fill filledWord
         for (uint32 i = 0; i < word.length; i++) {
-            Position memory letterPosition = getLetterPosition(
+            Position memory letterPosition = LibBoard.getLetterPosition(
                 int32(i),
                 position,
                 direction
@@ -359,14 +368,23 @@ contract BoardSystem is System, LinearVRGDA {
         // This double counts points on purpose (points are recounted for every valid word)
         for (uint32 i; i < filledWord.length; i++) {
             if (bounds.positive[i] != 0 || bounds.negative[i] != 0) {
-                Letter[] memory perpendicularWord = getWordInBoundsChecked(
-                    getLetterPosition(int32(i), position, direction),
-                    direction,
-                    bounds.positive[i],
-                    bounds.negative[i],
-                    tiles
+                Letter[] memory perpendicularWord = LibBoard
+                    .getWordInBoundsChecked(
+                        LibBoard.getLetterPosition(
+                            int32(i),
+                            position,
+                            direction
+                        ),
+                        direction,
+                        bounds.positive[i],
+                        bounds.negative[i],
+                        tiles
+                    );
+                LibBoard.verifyWordProof(
+                    perpendicularWord,
+                    bounds.proofs[i],
+                    merkleRoot
                 );
-                LibBoard.verifyWordProof(perpendicularWord, bounds.proofs[i], merkleRoot);
                 points += countPointsForWord(perpendicularWord);
             }
         }
@@ -374,61 +392,6 @@ contract BoardSystem is System, LinearVRGDA {
             getAddressById(components, ScoreComponentID)
         );
         scores.incrementValueAtAddress(msg.sender, msg.value, 0, points);
-    }
-
-    /// @notice Get the amount of rewards paid to every empty tile in the word.
-    function getRewardPerEmptyTile(Letter[] memory word)
-        private
-        view
-        returns (uint256)
-    {
-        uint256 numEmptyTiles;
-        for (uint32 i = 0; i < word.length; i++) {
-            if (word[i] == Letter.EMPTY) numEmptyTiles++;
-        }
-        // msg.value / rewardFraction is total to be paid out in rewards, split across numEmptyTiles
-        return (msg.value / rewardFraction) / numEmptyTiles;
-    }
-
-    /// @notice Gets the position of a letter in a word given an offset and a direction.
-    /// @dev Useful for looping through words.
-    /// @param letterOffset The offset of the position from the start position.
-    /// @param position The start position of the word.
-    /// @param direction The direction the word is being played in.
-    function getLetterPosition(
-        int32 letterOffset,
-        Position memory position,
-        Direction direction
-    ) private pure returns (Position memory) {
-        if (direction == Direction.LEFT_TO_RIGHT) {
-            return Position(position.x + letterOffset, position.y);
-        } else {
-            return Position(position.x, position.y + letterOffset);
-        }
-    }
-
-    /// @notice Gets the positions OUTSIDE a boundary on the boundary axis.
-    /// @dev Useful for checking if a boundary is valid.
-    /// @param letterPosition The start position of the letter for which the boundary is for.
-    /// @param direction The direction the original word (not the boundary) is being played in.
-    /// @param positive The distance the bound spans in the positive direction.
-    /// @param negative The distance the bound spans in the negative direction.
-    function getOutsideBoundPositions(
-        Position memory letterPosition,
-        Direction direction,
-        uint32 positive,
-        uint32 negative
-    ) private pure returns (Position memory, Position memory) {
-        Position memory start = Position(letterPosition.x, letterPosition.y);
-        Position memory end = Position(letterPosition.x, letterPosition.y);
-        if (direction == Direction.LEFT_TO_RIGHT) {
-            start.y -= (int32(negative) + 1);
-            end.y += (int32(positive) + 1);
-        } else {
-            start.x -= (int32(negative) + 1);
-            end.x += (int32(positive) + 1);
-        }
-        return (start, end);
     }
 
     /// @notice Ge the points for a given word. The points are simply a sum of the letter point values.
@@ -442,44 +405,6 @@ contract BoardSystem is System, LinearVRGDA {
             points += letterValue[word[i]];
         }
         return points;
-    }
-
-    /// @notice Gets the word inside a given boundary and checks to make sure there are no empty letters in the bound.
-    /// @dev Assumes that the word being made this round has already been played on board
-    function getWordInBoundsChecked(
-        Position memory letterPosition,
-        Direction direction,
-        uint32 positive,
-        uint32 negative,
-        TileComponent tiles
-    ) private view returns (Letter[] memory) {
-        uint32 wordLength = positive + negative + 1;
-        Letter[] memory word = new Letter[](wordLength);
-        Position memory position;
-        // Start at edge of negative bound
-        if (direction == Direction.LEFT_TO_RIGHT) {
-            position = getLetterPosition(
-                -1 * int32(negative),
-                letterPosition,
-                Direction.TOP_TO_BOTTOM
-            );
-        } else {
-            position = getLetterPosition(
-                -1 * int32(negative),
-                letterPosition,
-                Direction.LEFT_TO_RIGHT
-            );
-        }
-        for (uint32 i = 0; i < wordLength; i++) {
-            word[i] = tiles.getValueAtPosition(position).letter;
-            if (word[i] == Letter.EMPTY) revert EmptyLetterInBounds();
-            if (direction == Direction.LEFT_TO_RIGHT) {
-                position.y += 1;
-            } else {
-                position.x += 1;
-            }
-        }
-        return word;
     }
 
     /// @notice Get price for a letter using a linear VRGDA.
