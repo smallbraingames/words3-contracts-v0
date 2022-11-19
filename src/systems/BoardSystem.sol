@@ -13,7 +13,8 @@ import {Score} from "../common/Score.sol";
 import {Direction, Bounds, Position} from "../common/Play.sol";
 import {LinearVRGDA} from "../vrgda/LinearVRGDA.sol";
 import {toDaysWadUnsafe} from "solmate/utils/SignedWadMath.sol";
-import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import {LibBoard} from "../libraries/LibBoard.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import "../common/Errors.sol";
 
 uint256 constant ID = uint256(keccak256("system.Board"));
@@ -27,14 +28,14 @@ contract BoardSystem is System, LinearVRGDA {
     /// @notice Target price for a token, to be scaled according to sales pace.
     int256 public immutable vrgdaTargetPrice = 5e14;
     /// @notice The percent price decays per unit of time with no sales, scaled by 1e18.
-    int256 public immutable vrgdaPriceDecayPercent = 0.7e18;
+    int256 public immutable vrgdaPriceDecayPercent = 0.85e18;
     /// @notice The number of tokens to target selling in 1 full unit of time, scaled by 1e18.
     int256 public immutable vrgdaPerTimeUnit = 20e18;
     /// @notice Start time for vrgda calculations
     uint256 public immutable startTime = block.timestamp;
 
     /// @notice End time for game end
-    uint256 public immutable endTime = block.timestamp + 86400 * 2;
+    uint256 public immutable endTime = block.timestamp + 60 * 30;
     /// @notice Amount of sales that go to rewards (1/4)
     uint256 public immutable rewardFraction = 4;
 
@@ -42,7 +43,7 @@ contract BoardSystem is System, LinearVRGDA {
     bytes32 private merkleRoot =
         0xd848d23e6ac07f7c22c9cb0e121f568619a636d37fab669e76595adfda216273;
 
-    /// @notice Mapping for point values of letters, set up in setupLetterValues()
+    /// @notice Mapping for point values of letters, set up in setupLetterPoints()
     mapping(Letter => uint8) private letterValue;
 
     /// ============ Mutable Storage (ECS Sin, but gas savings) ============
@@ -195,7 +196,7 @@ contract BoardSystem is System, LinearVRGDA {
         countPointsChecked(filledWord, position, direction, bounds, tiles);
     }
 
-    /// @notice Checks if a word is 1) played on another word, 2) has at least one letter, 3) is a valid word and 4) has valid bounds.
+    /// @notice Checks if a word is 1) played on another word, 2) has at least one letter, 3) is a valid word, 4) has valid bounds, and 5) has not been played yet
     function checkWord(
         Letter[] memory word,
         bytes32[] memory proof,
@@ -251,7 +252,7 @@ contract BoardSystem is System, LinearVRGDA {
         // Ensure word has at least one letter
         if (!nonEmptyTile) revert NoLettersPlayed();
         // Ensure word is a valid word
-        verifyWordProof(filledWord, proof);
+        LibBoard.verifyWordProof(filledWord, proof, merkleRoot);
     }
 
     /// @notice Checks if the given bounds for other words on the cross axis are well formed.
@@ -365,7 +366,7 @@ contract BoardSystem is System, LinearVRGDA {
                     bounds.negative[i],
                     tiles
                 );
-                verifyWordProof(perpendicularWord, bounds.proofs[i]);
+                LibBoard.verifyWordProof(perpendicularWord, bounds.proofs[i], merkleRoot);
                 points += countPointsForWord(perpendicularWord);
             }
         }
@@ -373,16 +374,6 @@ contract BoardSystem is System, LinearVRGDA {
             getAddressById(components, ScoreComponentID)
         );
         scores.incrementValueAtAddress(msg.sender, msg.value, 0, points);
-    }
-
-    /// @notice Verifies a Merkle proof to check if a given word is in the dictionary.
-    function verifyWordProof(Letter[] memory word, bytes32[] memory proof)
-        private
-        view
-    {
-        bytes32 leaf = keccak256(abi.encodePacked(word));
-        bool isValidLeaf = MerkleProof.verify(proof, merkleRoot, leaf);
-        if (!isValidLeaf) revert InvalidWord();
     }
 
     /// @notice Get the amount of rewards paid to every empty tile in the word.
@@ -499,7 +490,8 @@ contract BoardSystem is System, LinearVRGDA {
         return
             getVRGDAPrice(
                 toDaysWadUnsafe(block.timestamp - startTime),
-                letterCount.getValueAtLetter(letter)
+                ((letterCount.getValueAtLetter(letter) * letterValue[letter]) /
+                    2) + 1
             );
     }
 
