@@ -26,7 +26,7 @@ contract BoardSystem is System, LinearVRGDA {
     /// @notice Target price for a token, to be scaled according to sales pace.
     int256 public immutable vrgdaTargetPrice = 5e14;
     /// @notice The percent price decays per unit of time with no sales, scaled by 1e18.
-    int256 public immutable vrgdaPriceDecayPercent = 0.75e18;
+    int256 public immutable vrgdaPriceDecayPercent = 0.77e18;
     /// @notice The number of tokens to target selling in 1 full unit of time, scaled by 1e18.
     int256 public immutable vrgdaPerTimeUnit = 20e18;
     /// @notice Start time for vrgda calculations
@@ -59,11 +59,6 @@ contract BoardSystem is System, LinearVRGDA {
     }
 
     /// ============ Public functions ============
-
-    // HERE FOR TESTING PURPOSES
-    function setMerkleRoot(bytes32 newMerkleRoot) public {
-        merkleRoot = newMerkleRoot;
-    }
 
     function execute(bytes memory arguments) public returns (bytes memory) {
         (
@@ -432,7 +427,7 @@ contract BoardSystem is System, LinearVRGDA {
         returns (uint256)
     {
         uint256 price;
-        for (uint256 i = 0; i < word.length; i++) {
+        for (uint32 i = 0; i < word.length; i++) {
             if (word[i] != Letter.EMPTY) {
                 price += getPriceForLetter(word[i]);
             }
