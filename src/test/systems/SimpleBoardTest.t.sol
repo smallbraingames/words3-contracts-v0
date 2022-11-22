@@ -224,6 +224,70 @@ contract SimpleBoardTest is MudTest {
         );
     }
 
+    function testFailWriteToTileDirectly()
+        public
+        prank(deployer)
+        setupBoard(deployer)
+    {
+        vm.deal(deployer, 2 ether);
+        TileComponent tiles = TileComponent(
+            getAddressById(components, TileComponentID)
+        );
+        tiles.set(
+            Tile({
+                position: Position({x: 1, y: 1}),
+                player: address(0),
+                letter: Letter.A
+            })
+        );
+    }
+
+    function testFailWriteToScoreDirectly(address writer)
+        public
+        setupBoard(deployer)
+    {
+        vm.assume(writer != address(0));
+        vm.assume(writer != system(BoardSystemID));
+        vm.startPrank(writer);
+        ScoreComponent scores = ScoreComponent(
+            getAddressById(components, ScoreComponentID)
+        );
+        scores.incrementValueAtAddress(address(0), 10, 10, 10);
+    }
+
+    function testFailWriteToTileDirectlyFuzz(address writer)
+        public
+        setupBoard(deployer)
+    {
+        vm.assume(writer != address(0));
+        vm.assume(writer != system(BoardSystemID));
+        vm.startPrank(writer);
+        TileComponent tiles = TileComponent(
+            getAddressById(components, TileComponentID)
+        );
+        tiles.set(
+            Tile({
+                position: Position({x: 1, y: 1}),
+                player: address(0),
+                letter: Letter.A
+            })
+        );
+    }
+
+    function testFailWriteToLetterCountDirectly(address writer, uint8 rawLetter)
+        public
+        setupBoard(deployer)
+    {
+        vm.assume(writer != address(0));
+        vm.assume(writer != system(BoardSystemID));
+        vm.assume(rawLetter <= 27);
+        vm.startPrank(writer);
+        LetterCountComponent letterCount = LetterCountComponent(
+            getAddressById(components, LetterCountComponentID)
+        );
+        letterCount.incrementValueAtLetter(Letter(rawLetter));
+    }
+
     function playHello(
         BoardSystem boardSystem,
         int32 x,

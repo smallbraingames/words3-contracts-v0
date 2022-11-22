@@ -22,6 +22,7 @@
     "deploy:hardhat": "wait-on tcp:8545 && yarn hardhat:resetfee && mud deploy --deployerPrivateKey && yarn hardhat:resetfee && yarn types",
     "deploy:degen": "mud deploy -i --deployerPrivateKey",
     "deploy:prod": "mud deploy --deployerPrivateKey --chainSpec https://mud-config.pages.dev/chainSpec.json",
+    "deploy:optimism": "mud deploy --deployerPrivateKey --chainSpec optimism-testnet.json",
     "deploy:arbitrum:goerli": "mud deploy --deployerPrivateKey --chainSpec arbitrum-testnet.json",
     "upgrade:anvil": "wait-on tcp:8545 && mud deploy --deployerPrivateKey --upgradeSystems",
     "upgrade:hardhat": "wait-on tcp:8545 && yarn hardhat:resetfee && mud deploy --deployerPrivateKey  --upgradeSystems && yarn hardhat:resetfee && yarn types",

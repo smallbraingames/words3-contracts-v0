@@ -12,3 +12,4 @@ broadcast/
 src/libraries/LibDeploy.sol
 src/types
 mud-private-key.txt
+optimism-testnet.json
