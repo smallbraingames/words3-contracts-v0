@@ -20,11 +20,11 @@ library LibBoard {
     }
 
     /// @notice Get the amount of rewards paid to every empty tile in the word.
-    function getRewardPerEmptyTile(Letter[] memory word, uint256 rewardFraction, uint256 value)
-        internal
-        pure
-        returns (uint256)
-    {
+    function getRewardPerEmptyTile(
+        Letter[] memory word,
+        uint256 rewardFraction,
+        uint256 value
+    ) internal pure returns (uint256) {
         uint256 numEmptyTiles;
         for (uint32 i = 0; i < word.length; i++) {
             if (word[i] == Letter.EMPTY) numEmptyTiles++;
@@ -62,6 +62,7 @@ library LibBoard {
         uint32 positive,
         uint32 negative
     ) internal pure returns (Position memory, Position memory) {
+        if (positive > 200 || negative > 200) revert BoundTooLong();
         Position memory start = Position(letterPosition.x, letterPosition.y);
         Position memory end = Position(letterPosition.x, letterPosition.y);
         if (direction == Direction.LEFT_TO_RIGHT) {

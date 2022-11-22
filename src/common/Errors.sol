@@ -17,3 +17,7 @@ error EmptyLetterNotOnExisting();
 error LetterOnExistingTile();
 error LonelyWord();
 error NoLettersPlayed();
+error AlreadySetupGrid();
+error InvalidCrossProofs();
+error BoundTooLong();
+error WordTooLong();

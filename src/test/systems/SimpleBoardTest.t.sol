@@ -167,11 +167,11 @@ contract SimpleBoardTest is MudTest {
         word[3] = Letter.EMPTY;
         word[4] = Letter.EMPTY;
 
-        uint32[] memory negative = new uint32[](4);
-        uint32[] memory positive = new uint32[](4);
+        uint32[] memory negative = new uint32[](5);
+        uint32[] memory positive = new uint32[](5);
 
         bytes32[] memory proof = m.getProof(words, 0);
-        bytes32[][] memory proofs = new bytes32[][](1);
+        bytes32[][] memory proofs = new bytes32[][](5);
 
         vm.expectRevert(NoLettersPlayed.selector);
         boardSystem.executeTyped{value: 1 ether}(
@@ -212,7 +212,7 @@ contract SimpleBoardTest is MudTest {
         uint32[] memory positive = new uint32[](2);
 
         bytes32[] memory proof = m.getProof(words, 0);
-        bytes32[][] memory proofs = new bytes32[][](1);
+        bytes32[][] memory proofs = new bytes32[][](2);
 
         vm.expectRevert(LonelyWord.selector);
         boardSystem.executeTyped{value: 1 ether}(
@@ -266,7 +266,7 @@ contract SimpleBoardTest is MudTest {
         uint32[] memory positive = new uint32[](2);
 
         bytes32[] memory proof = m.getProof(words, 0);
-        bytes32[][] memory proofs = new bytes32[][](1);
+        bytes32[][] memory proofs = new bytes32[][](2);
 
         boardSystem.executeTyped{value: 1 ether}(
             word,

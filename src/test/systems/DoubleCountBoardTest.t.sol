@@ -19,10 +19,11 @@ import "../../common/Errors.sol";
 contract DoubleCountBoardTest is MudTest {
     bytes32[] public words;
     Merkle private m; // Store here to avoid stack too deep errors
+    BoardSystem boardSystem;
 
     modifier setupBoard(address deployer) {
         vm.deal(deployer, 10 ether);
-        BoardSystem boardSystem = BoardSystem(system(BoardSystemID));
+        boardSystem = BoardSystem(system(BoardSystemID));
         boardSystem.setMerkleRoot(m.getRoot(words));
         boardSystem.setupInitialGrid();
         _;
@@ -44,6 +45,12 @@ contract DoubleCountBoardTest is MudTest {
             )
         ); // ZNZZZ (another made up word to test double counting)
         words.push(keccak256(abi.encodePacked([Letter.A, Letter.Z]))); // AZ (word to test double counting)
+        words.push(
+            keccak256(
+                abi.encodePacked([Letter.F, Letter.A, Letter.A, Letter.A])
+            )
+        ); // FAAA (word to test triple counting and alignment)
+        words.push(keccak256(abi.encodePacked([Letter.A, Letter.Z, Letter.A]))); // AZ (word to test double counting)
     }
 
     function testTripleDoubleCounting() public setupBoard(deployer) {
@@ -51,12 +58,11 @@ contract DoubleCountBoardTest is MudTest {
         /*
               Z
             I N F I N I T E
-            A Z  
-            A Z   
-            A Z  
+            A Z A 
+            A Z A 
+            A Z A
          */
         // The words AZ should be counted three times as well as ZNZZZ
-        BoardSystem boardSystem = BoardSystem(system(BoardSystemID));
         ScoreComponent scores = ScoreComponent(component(ScoreComponentID));
 
         // Play IAAA
@@ -113,11 +119,50 @@ contract DoubleCountBoardTest is MudTest {
         // just played iaaa
         assertTrue(contractScore.score == 4);
         assertTrue(contractScore.rewards == 0);
-        assertTrue(playerOneScore.spent == 1 ether);
+        assertTrue(contractScore.spent == 1 ether);
         // played (znzzz = 41) + (az = 11) * 3 = 74
         assertTrue(playerOneScore.score == 74);
         assertTrue(playerOneScore.rewards == 0);
         assertTrue(playerOneScore.spent == 1 ether);
+
+        // Play FAAA
+        Letter[] memory faaa = new Letter[](4);
+        faaa[0] = Letter.EMPTY;
+        faaa[1] = Letter.A;
+        faaa[2] = Letter.A;
+        faaa[3] = Letter.A;
+
+        uint32[] memory negativeFaaa = new uint32[](4);
+        negativeFaaa[1] = 2;
+        negativeFaaa[2] = 2;
+        negativeFaaa[3] = 2;
+
+        bytes32[][] memory proofsFaaa = new bytes32[][](4);
+        bytes32[] memory azaProof = m.getProof(words, 4);
+        proofsFaaa[1] = azaProof;
+        proofsFaaa[2] = azaProof;
+        proofsFaaa[3] = azaProof;
+
+        boardSystem.executeTyped{value: 1 ether}(
+            faaa,
+            m.getProof(words, 3),
+            Position(2, 0),
+            Direction.TOP_TO_BOTTOM,
+            Bounds(new uint32[](4), negativeFaaa, proofsFaaa)
+        );
+
+        // Check accounting
+        Score memory contractScoreTwo = scores.getValueAtAddress(address(this));
+        Score memory playerOneScoreTwo = scores.getValueAtAddress(playerOne);
+
+        // just played iaaa
+        assertTrue(contractScoreTwo.score == 4);
+        assertTrue(contractScoreTwo.rewards == 0);
+        assertTrue(contractScoreTwo.spent == 1 ether);
+        // played (znzzz = 41) + (az = 11) * 3 = 74 + (faaa = 7) + (zaz = 12) * 3 = 117
+        assertTrue(playerOneScoreTwo.score == 117);
+        assertTrue(playerOneScoreTwo.rewards == 0);
+        assertTrue(playerOneScoreTwo.spent == 2 ether);
 
         // Check payout
         vm.warp(block.timestamp + 1000000);
@@ -126,7 +171,9 @@ contract DoubleCountBoardTest is MudTest {
         uint256 postBalance = address(playerOne).balance;
         assertTrue(
             (postBalance - prevBalance) ==
-                (uint256(2 ether - 1 ether / 4 - 1 ether / 4) * 74) / 78
+                (uint256(3 ether - 1 ether / 4 - 1 ether / 4 - 1 ether / 4) *
+                    117) /
+                    121
         );
     }
 }

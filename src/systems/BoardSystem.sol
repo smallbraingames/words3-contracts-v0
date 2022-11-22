@@ -2,7 +2,6 @@
 pragma solidity >=0.8.0;
 import "solecs/System.sol";
 import {IWorld} from "solecs/interfaces/IWorld.sol";
-import {IComponent} from "solecs/interfaces/IComponent.sol";
 import {getAddressById} from "solecs/utils.sol";
 import {TileComponent, ID as TileComponentID} from "../components/TileComponent.sol";
 import {ScoreComponent, ID as ScoreComponentID} from "../components/ScoreComponent.sol";
@@ -14,7 +13,6 @@ import {Direction, Bounds, Position} from "../common/Play.sol";
 import {LinearVRGDA} from "../vrgda/LinearVRGDA.sol";
 import {toDaysWadUnsafe} from "solmate/utils/SignedWadMath.sol";
 import {LibBoard} from "../libraries/LibBoard.sol";
-import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import "../common/Errors.sol";
 
 uint256 constant ID = uint256(keccak256("system.Board"));
@@ -35,7 +33,7 @@ contract BoardSystem is System, LinearVRGDA {
     uint256 public immutable startTime = block.timestamp;
 
     /// @notice End time for game end
-    uint256 public immutable endTime = block.timestamp + 60 * 30;
+    uint256 public immutable endTime = block.timestamp + 86400 * 7;
     /// @notice Amount of sales that go to rewards (1/4)
     uint256 public immutable rewardFraction = 4;
 
@@ -129,6 +127,8 @@ contract BoardSystem is System, LinearVRGDA {
         TileComponent tiles = TileComponent(
             getAddressById(components, TileComponentID)
         );
+        if (tiles.hasTileAtPosition(Position({x: 0, y: 0})))
+            revert AlreadySetupGrid();
         tiles.set(Tile(address(0), Position({x: 0, y: 0}), Letter.I));
         tiles.set(Tile(address(0), Position({x: 1, y: 0}), Letter.N));
         tiles.set(Tile(address(0), Position({x: 2, y: 0}), Letter.F));
@@ -161,7 +161,7 @@ contract BoardSystem is System, LinearVRGDA {
         LetterCountComponent letterCount = LetterCountComponent(
             getAddressById(components, LetterCountComponentID)
         );
-        for (uint256 i = 0; i < word.length; i++) {
+        for (uint32 i = 0; i < word.length; i++) {
             if (word[i] != Letter.EMPTY) {
                 letterCount.incrementValueAtLetter(word[i]);
             }
@@ -204,6 +204,8 @@ contract BoardSystem is System, LinearVRGDA {
         Direction direction,
         TileComponent tiles
     ) public view {
+        // Ensure word is less than 200 letters
+        if (word.length > 200) revert WordTooLong();
         // Ensure word isn't missing letters at edges
         if (
             tiles.hasTileAtPosition(
@@ -271,6 +273,9 @@ contract BoardSystem is System, LinearVRGDA {
             revert BoundsDoNotMatch();
         // Ensure bounds of correct length
         if (bounds.positive.length != word.length) revert InvalidBoundLength();
+        // Ensure proof of correct length
+        if (bounds.positive.length != bounds.proofs.length)
+            revert InvalidCrossProofs();
 
         // Ensure positive and negative bounds are valid
         for (uint32 i; i < word.length; i++) {
@@ -415,8 +420,8 @@ contract BoardSystem is System, LinearVRGDA {
         return
             getVRGDAPrice(
                 toDaysWadUnsafe(block.timestamp - startTime),
-                ((letterCount.getValueAtLetter(letter) * letterValue[letter]) /
-                    2) + 1
+                ((letterValue[letter] + 1) / 2) *
+                    letterCount.getValueAtLetter(letter)
             );
     }
 
